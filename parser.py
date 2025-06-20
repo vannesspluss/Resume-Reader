@@ -30,49 +30,91 @@ def extract_field(pattern, text, group=1):
 
 # Resume field parser
 def extract_resume_data(text):
-    # Basic fields
-    name = extract_field(r'(?i)(Name\s*[:\-]?\s*)([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text, group=2)
-    email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+    lines = text.splitlines()
+    lines = [line.strip() for line in lines if line.strip()]
+    full_text = "\n".join(lines)
+
+    # Try to infer name (top 3 lines)
+    name = None
+    for line in lines[:3]:
+        if re.match(r'^[A-Z][a-z]+\s+[A-Z][a-z]+', line):
+            name = line.strip()
+            break
+
+    # Extract other basic fields
+    email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', full_text)
     email = email_match.group(0) if email_match else None
 
-    phone_match = re.search(r'(\+?\d[\d\s()-]{7,}\d)', text)
+    phone_match = re.search(r'(\+?\d[\d\s()-]{7,}\d)', full_text)
     phone = phone_match.group(1) if phone_match else None
 
-    # name = extract_field(r'Name\s*[:\-]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text)
-    gender = extract_field(r'Gender\s*[:\-]?\s*(Male|Female|Other)', text)
-    dob = extract_field(r'Date of Birth\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', text)
-    university = extract_field(r'University\s*[:\-]?\s*(.+)', text)
-    degree = extract_field(r'(?:Degree|Bachelor|Master|Doctor)\s*[:\-]?\s*(.+)', text)
-    major = extract_field(r'Major\s*[:\-]?\s*(.+)', text)
-    gpax = extract_field(r'(?:GPAX|GPA)\s*[:\-]?\s*([\d.]+)', text)
-    grad_year = extract_field(r'Graduation\s*(?:Year)?\s*[:\-]?\s*(\d{4})', text)
-    skills = re.findall(r'\b(?:Skills?|Technologies?|Soft Skills?|Strengths?)\b\s*[:\-]?\s*(.*)', text, re.IGNORECASE)
+    gender = extract_field(r'Gender\s*[:\-]?\s*(Male|Female|Other)', full_text)
+    dob = extract_field(r'Date of Birth\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', full_text)
 
     # Age calculation
     age = None
     if dob:
-        try:
-            dob_date = datetime.strptime(dob, "%d/%m/%Y")
-            age = datetime.today().year - dob_date.year
-        except ValueError:
-            pass
+        for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"]:
+            try:
+                dob_date = datetime.strptime(dob, fmt)
+                age = datetime.today().year - dob_date.year
+                break
+            except ValueError:
+                continue
 
-    # Experience parsing
-    experience_pattern = re.compile(
-        r'(?i)(Company\s*[:\-]?\s*)(?P<company>.*?)\s*[\n\r]+'
-        r'(Position\s*[:\-]?\s*)(?P<position>.*?)\s*[\n\r]+'
-        r'(?P<duration>(?:\w{3,9}\s\d{4})\s*[-–]\s*(?:\w{3,9}\s\d{4}))\s*[\n\r]+'
-        r'(?P<responsibilities>(?:[-•*].*\n?)+)', re.IGNORECASE)
+    # === Extract Education Section ===
+    edu_section = re.search(r'(Education|Educational Background)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.DOTALL | re.IGNORECASE)
+    university = degree = major = gpax = grad_year = None
+    if edu_section:
+        edu_text = edu_section.group(2)
 
-    match = experience_pattern.search(text)
-    experience = {}
-    if match:
-        experience = {
-            "Company": match.group("company").strip(),
-            "Position": match.group("position").strip(),
-            "Duration": match.group("duration").strip(),
-            "Responsibilities": [line.strip("•*- ") for line in match.group("responsibilities").splitlines() if line.strip()]
+        university_match = re.search(r'(?i)(university|institute|college)[^\n]*', edu_text)
+        if university_match:
+            university = university_match.group(0).strip()
+
+        degree_match = re.search(r'(?i)(bachelor|master|doctor)[^\n]*', edu_text)
+        if degree_match:
+            degree = degree_match.group(0).strip()
+
+        major_match = re.search(r'(?i)(major\s*[:\-]?\s*)([^\n,]+)', edu_text)
+        if major_match:
+            major = major_match.group(2).strip()
+
+        gpax_match = re.search(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', edu_text)
+        if gpax_match:
+            gpax = gpax_match.group(2).strip()
+
+        grad_match = re.search(r'Graduation\s*(Year)?\s*[:\-]?\s*(\d{4})', edu_text)
+        if grad_match:
+            grad_year = grad_match.group(2).strip()
+
+    # === Extract Skills Section ===
+    skills_section = re.search(r'(Skills|Technologies|Tools|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.IGNORECASE | re.DOTALL)
+    skills = []
+    if skills_section:
+        skill_text = skills_section.group(2)
+        for line in skill_text.splitlines():
+            if re.search(r'[a-zA-Z]', line):
+                skills.extend([s.strip() for s in re.split(r'[,•;|]', line) if s.strip()])
+    skills = list(set(skills)) if skills else None
+
+    # === Extract Work Experience Section (Multiple Entries) ===
+    experience_list = []
+    experience_blocks = re.findall(
+        r'(?i)(Company\s*[:\-]?\s*(.*?)\n)?'
+        r'(Position\s*[:\-]?\s*(.*?)\n)?'
+        r'((?:\w{3,9}\s\d{4})\s*[-–]\s*(?:\w{3,9}\s\d{4}|Present))\n'
+        r'((?:[-•*].*\n?)+)',
+        full_text
+    )
+    for block in experience_blocks:
+        exp = {
+            "Company": block[1].strip() if block[1] else None,
+            "Position": block[3].strip() if block[3] else None,
+            "Duration": block[4].strip(),
+            "Responsibilities": [line.strip("•*- ") for line in block[5].splitlines() if line.strip()]
         }
+        experience_list.append(exp)
 
     return {
         "Name": name,
@@ -86,8 +128,8 @@ def extract_resume_data(text):
         "Major": major,
         "Gpax": gpax,
         "Graduation Year": grad_year,
-        "Skills": skills[0].split(',') if skills else None,
-        "Experience": experience
+        "Skills": skills,
+        "Experience": experience_list if experience_list else None
     }
 
 # Wrapper to detect file type and extract

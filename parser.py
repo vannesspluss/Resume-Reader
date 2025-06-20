@@ -31,7 +31,10 @@ def extract_field(pattern, text, group=1):
 # Resume field parser
 def extract_resume_data(text):
     # Basic fields
-    name = extract_field(r'Name\s*[:\-]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text)
+    name = re.search(r'(?i)(Name\s*[:\-]?\s*)([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text)
+    email = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+    phone = re.search(r'(\+?\d[\d\s()-]{7,}\d)', text)
+    # name = extract_field(r'Name\s*[:\-]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text)
     gender = extract_field(r'Gender\s*[:\-]?\s*(Male|Female|Other)', text)
     dob = extract_field(r'Date of Birth\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', text)
     university = extract_field(r'University\s*[:\-]?\s*(.+)', text)
@@ -72,6 +75,8 @@ def extract_resume_data(text):
         "Gender": gender,
         "Date of Birth": dob,
         "Age": age,
+        "Email": email,
+        "Tel": phone,
         "University": university,
         "Degree": degree,
         "Major": major,

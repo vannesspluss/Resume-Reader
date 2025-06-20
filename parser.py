@@ -35,11 +35,11 @@ def extract_resume_data(text):
     gender = extract_field(r'Gender\s*[:\-]?\s*(Male|Female|Other)', text)
     dob = extract_field(r'Date of Birth\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', text)
     university = extract_field(r'University\s*[:\-]?\s*(.+)', text)
-    degree = extract_field(r'Degree\s*[:\-]?\s*(.+)', text)
+    degree = extract_field(r'Bachelor/Master/Doctor\s*[:\-]?\s*(.+)', text)
     major = extract_field(r'Major\s*[:\-]?\s*(.+)', text)
     gpax = extract_field(r'(?:GPAX|GPA)\s*[:\-]?\s*([\d.]+)', text)
     grad_year = extract_field(r'Graduation\s*(?:Year)?\s*[:\-]?\s*(\d{4})', text)
-    skills = re.findall(r'\b(?:Skills?|Technologies?)\b\s*[:\-]?\s*(.*)', text, re.IGNORECASE)
+    skills = re.findall(r'\b(?:Skills?|Technologies?|Soft Skills?|Strengths?)\b\s*[:\-]?\s*(.*)', text, re.IGNORECASE)
 
     # Age calculation
     age = None

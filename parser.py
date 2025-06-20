@@ -6,45 +6,53 @@ import re
 import os
 from datetime import datetime
 
-# File text extractors
+# Text extractors
 def extract_text_from_pdf(pdf_path):
     text = ""
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text() or ""
                 text += page_text + "\n"
-    return text
+    except Exception as e:
+        print(f"Error reading PDF: {e}")
+    return text.strip()
 
 def extract_text_from_docx(docx_path):
-    return docx2txt.process(docx_path)
+    try:
+        return docx2txt.process(docx_path).strip()
+    except Exception as e:
+        print(f"Error reading DOCX: {e}")
+        return ""
 
 def extract_text_from_image(image_path):
-    image = Image.open(image_path)
-    return pytesseract.image_to_string(image)
+    try:
+        image = Image.open(image_path)
+        return pytesseract.image_to_string(image).strip()
+    except Exception as e:
+        print(f"Error reading image: {e}")
+        return ""
 
-# Field extraction helper
+# Helper function
 def extract_field(pattern, text, group=1, flags=re.IGNORECASE):
     match = re.search(pattern, text, flags)
     return match.group(group).strip() if match else None
 
-# Resume parser
+# Main resume parser
 def extract_resume_data(text):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     full_text = "\n".join(lines)
 
-    # Name detection
     name = None
     for line in lines[:5]:
         if re.match(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$', line):
             name = line
             break
     if not name:
-        email_name = re.search(r'^([a-z]+)\.([a-z]+)@', full_text, re.IGNORECASE)
-        if email_name:
-            name = f"{email_name.group(1).capitalize()} {email_name.group(2).capitalize()}"
+        match = re.search(r'^([a-z]+)\.([a-z]+)@', full_text, re.IGNORECASE)
+        if match:
+            name = f"{match.group(1).capitalize()} {match.group(2).capitalize()}"
 
-    # Basic details
     email = extract_field(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', full_text)
     phone = extract_field(r'(\+?\d[\d\s().-]{7,}\d)', full_text)
 
@@ -61,7 +69,7 @@ def extract_resume_data(text):
             except ValueError:
                 continue
 
-    # Education extraction
+    # Education section
     university = degree = major = gpax = grad_year = None
     edu_block = re.search(r'(EDUCATION|Education)(.*?)(?=\n[A-Z][a-z]+|\nPROFILE|\nSKILLS|\nEXPERIENCE|$)', full_text, re.DOTALL)
     if edu_block:
@@ -72,7 +80,7 @@ def extract_resume_data(text):
         gpax = extract_field(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', edu_text, group=2)
         grad_year = extract_field(r'(\b20\d{2}\b)', edu_text)
 
-    # Skills
+    # Skills section
     skills = []
     skill_block = re.search(r'(Skills|SKILLS|Technologies|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|\nPROJECTS|\nEXPERIENCE|$)', full_text, re.DOTALL)
     if skill_block:
@@ -114,7 +122,7 @@ def extract_resume_data(text):
         "Experience": experience_list or None
     }
 
-# Auto file type detector
+# Format detector and entry point
 def parse_resume(file_path):
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".pdf":
@@ -124,5 +132,9 @@ def parse_resume(file_path):
     elif ext in [".png", ".jpg", ".jpeg"]:
         text = extract_text_from_image(file_path)
     else:
-        return {"error": "Unsupported file format"}
+        return {"error": f"Unsupported file format: {ext}"}
+    
+    if not text:
+        return {"error": "No extractable text found."}
+
     return extract_resume_data(text)

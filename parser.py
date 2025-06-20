@@ -31,14 +31,18 @@ def extract_field(pattern, text, group=1):
 # Resume field parser
 def extract_resume_data(text):
     # Basic fields
-    name = re.search(r'(?i)(Name\s*[:\-]?\s*)([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text)
-    email = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
-    phone = re.search(r'(\+?\d[\d\s()-]{7,}\d)', text)
+    name = extract_field(r'(?i)(Name\s*[:\-]?\s*)([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text, group=2)
+    email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+    email = email_match.group(0) if email_match else None
+
+    phone_match = re.search(r'(\+?\d[\d\s()-]{7,}\d)', text)
+    phone = phone_match.group(1) if phone_match else None
+
     # name = extract_field(r'Name\s*[:\-]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)', text)
     gender = extract_field(r'Gender\s*[:\-]?\s*(Male|Female|Other)', text)
     dob = extract_field(r'Date of Birth\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', text)
     university = extract_field(r'University\s*[:\-]?\s*(.+)', text)
-    degree = extract_field(r'Bachelor/Master/Doctor\s*[:\-]?\s*(.+)', text)
+    degree = extract_field(r'(?:Degree|Bachelor|Master|Doctor)\s*[:\-]?\s*(.+)', text)
     major = extract_field(r'Major\s*[:\-]?\s*(.+)', text)
     gpax = extract_field(r'(?:GPAX|GPA)\s*[:\-]?\s*([\d.]+)', text)
     grad_year = extract_field(r'Graduation\s*(?:Year)?\s*[:\-]?\s*(\d{4})', text)

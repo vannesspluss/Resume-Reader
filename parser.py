@@ -9,50 +9,42 @@ from datetime import datetime
 # Text extractors
 def extract_text_from_pdf(pdf_path):
     text = ""
-    try:
-        with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text() or ""
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            if page_text:
                 text += page_text + "\n"
-    except Exception as e:
-        print(f"Error reading PDF: {e}")
-    return text.strip()
+    return text
 
 def extract_text_from_docx(docx_path):
-    try:
-        return docx2txt.process(docx_path).strip()
-    except Exception as e:
-        print(f"Error reading DOCX: {e}")
-        return ""
+    return docx2txt.process(docx_path)
 
 def extract_text_from_image(image_path):
-    try:
-        image = Image.open(image_path)
-        return pytesseract.image_to_string(image).strip()
-    except Exception as e:
-        print(f"Error reading image: {e}")
-        return ""
+    image = Image.open(image_path)
+    return pytesseract.image_to_string(image)
 
-# Helper function
-def extract_field(pattern, text, group=1, flags=re.IGNORECASE):
-    match = re.search(pattern, text, flags)
+# Helper function to extract fields
+def extract_field(pattern, text, group=1):
+    match = re.search(pattern, text, re.IGNORECASE)
     return match.group(group).strip() if match else None
 
-# Main resume parser
+# Resume field parser
 def extract_resume_data(text):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     full_text = "\n".join(lines)
 
+    # Name
     name = None
     for line in lines[:5]:
         if re.match(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$', line):
             name = line
             break
     if not name:
-        match = re.search(r'^([a-z]+)\.([a-z]+)@', full_text, re.IGNORECASE)
-        if match:
-            name = f"{match.group(1).capitalize()} {match.group(2).capitalize()}"
+        email_match = re.search(r'([a-z]+)\.([a-z]+)@', full_text, re.IGNORECASE)
+        if email_match:
+            name = f"{email_match.group(1).capitalize()} {email_match.group(2).capitalize()}"
 
+    # Email and phone
     email = extract_field(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', full_text)
     phone = extract_field(r'(\+?\d[\d\s().-]{7,}\d)', full_text)
 
@@ -69,42 +61,44 @@ def extract_resume_data(text):
             except ValueError:
                 continue
 
-    # Education section
+    # Education block (more flexible)
+    edu_section = re.search(r'(Education|EDUCATION|Educational Background)(.*?)(?=\n[A-Z][a-z]+|\nPROFILE|\nSKILLS|\nEXPERIENCE|$)', full_text, re.DOTALL)
     university = degree = major = gpax = grad_year = None
-    edu_block = re.search(r'(EDUCATION|Education)(.*?)(?=\n[A-Z][a-z]+|\nPROFILE|\nSKILLS|\nEXPERIENCE|$)', full_text, re.DOTALL)
-    if edu_block:
-        edu_text = edu_block.group(2)
+    if edu_section:
+        edu_text = edu_section.group(2)
+
         university = extract_field(r'(University|Institute|College)[^\n]*', edu_text)
         degree = extract_field(r'(Bachelor|Master|Ph\.?D)[^\n]*', edu_text)
         major = extract_field(r'(Major\s*[:\-]?\s*)([^\n,]+)', edu_text, group=2)
         gpax = extract_field(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', edu_text, group=2)
-        grad_year = extract_field(r'(\b20\d{2}\b)', edu_text)
+        grad_year = extract_field(r'\b(20\d{2})\b', edu_text)
 
-    # Skills section
+    # Skills (case insensitive)
     skills = []
-    skill_block = re.search(r'(Skills|SKILLS|Technologies|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|\nPROJECTS|\nEXPERIENCE|$)', full_text, re.DOTALL)
-    if skill_block:
-        for line in skill_block.group(2).splitlines():
-            if any(c.isalpha() for c in line):
-                skills += [s.strip() for s in re.split(r'[•,;|]', line) if s.strip()]
-    skills = sorted(set(skills)) if skills else None
+    skills_section = re.search(r'(Skills|SKILLS|Technologies|Tools|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|\nPROJECTS|\nEXPERIENCE|$)', full_text, re.IGNORECASE | re.DOTALL)
+    if skills_section:
+        for line in skills_section.group(2).splitlines():
+            if re.search(r'[a-zA-Z]', line):
+                skills.extend([s.strip() for s in re.split(r'[,•;|]', line) if s.strip()])
+    skills = list(set(skills)) if skills else None
 
-    # Experience
+    # Work Experience (fallback even without Position/Company)
     experience_list = []
-    exp_matches = re.findall(
-        r'(?:Company\s*[:\-]?\s*(.*?)\n)?'
-        r'(?:Position\s*[:\-]?\s*(.*?)\n)?'
-        r'((?:\w+\s*\d{4})\s*[-–]\s*(?:\w+\s*\d{4}|Present))\n'
+    experience_blocks = re.findall(
+        r'(?i)(Company\s*[:\-]?\s*(.*?)\n)?'
+        r'(Position\s*[:\-]?\s*(.*?)\n)?'
+        r'((?:\w{3,9}\s\d{4})\s*[-–]\s*(?:\w{3,9}\s\d{4}|Present))\n'
         r'((?:[-•*].*\n?)+)',
-        full_text, re.IGNORECASE
+        full_text
     )
-    for match in exp_matches:
-        experience_list.append({
-            "Company": match[0].strip() if match[0] else None,
-            "Position": match[1].strip() if match[1] else None,
-            "Duration": match[2].strip(),
-            "Responsibilities": [x.strip("•*- ") for x in match[3].splitlines() if x.strip()]
-        })
+    for block in experience_blocks:
+        exp = {
+            "Company": block[1].strip() if block[1] else None,
+            "Position": block[3].strip() if block[3] else None,
+            "Duration": block[4].strip(),
+            "Responsibilities": [line.strip("•*- ") for line in block[5].splitlines() if line.strip()]
+        }
+        experience_list.append(exp)
 
     return {
         "Name": name,
@@ -119,10 +113,10 @@ def extract_resume_data(text):
         "Gpax": gpax,
         "Graduation Year": grad_year,
         "Skills": skills,
-        "Experience": experience_list or None
+        "Experience": experience_list if experience_list else None
     }
 
-# Format detector and entry point
+# Wrapper to detect file type and extract
 def parse_resume(file_path):
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".pdf":
@@ -132,9 +126,6 @@ def parse_resume(file_path):
     elif ext in [".png", ".jpg", ".jpeg"]:
         text = extract_text_from_image(file_path)
     else:
-        return {"error": f"Unsupported file format: {ext}"}
-    
-    if not text:
-        return {"error": "No extractable text found."}
+        return {"error": "Unsupported file format"}
 
     return extract_resume_data(text)

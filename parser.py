@@ -34,12 +34,12 @@ def extract_resume_data(text):
     lines = [line.strip() for line in lines if line.strip()]
     full_text = "\n".join(lines)
 
-    # Try to infer name (top 3 lines)
     name = None
-    for line in lines[:3]:
-        if re.match(r'^[A-Z][a-z]+\s+[A-Z][a-z]+', line):
-            name = line.strip()
+    for line in lines[:5]:
+        if re.match(r'^[A-Za-z\'-]+\s+[A-Za-z\'-]+$', line):
+            name = line.strip().title()  # Normalize to Title Case
             break
+
 
     # Extract other basic fields
     email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', full_text)
@@ -68,7 +68,7 @@ def extract_resume_data(text):
     if edu_section:
         edu_text = edu_section.group(2)
 
-        university_match = re.search(r'(?i)(university|institute|college)[^\n]*', edu_text)
+        university_match = re.search(r'(university|institute|college)[^\n]*', edu_text, re.IGNORECASE)
         if university_match:
             university = university_match.group(0).strip()
 
@@ -93,10 +93,9 @@ def extract_resume_data(text):
     skills = []
     if skills_section:
         skill_text = skills_section.group(2)
-        for line in skill_text.splitlines():
-            if re.search(r'[a-zA-Z]', line):
-                skills.extend([s.strip() for s in re.split(r'[,•;|]', line) if s.strip()])
-    skills = list(set(skills)) if skills else None
+        # Clean skills, make them unique and properly capitalized
+        skills = list({s.strip().title() for s in re.split(r'[,•;|]', skill_text) if re.search(r'[a-zA-Z]', s)})
+    skills = skills if skills else None
 
     # === Extract Work Experience Section (Multiple Entries) ===
     experience_list = []

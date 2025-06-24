@@ -5,6 +5,10 @@ import docx2txt
 import re
 import os
 from datetime import datetime
+import pytesseract
+
+# Explicitly tell pytesseract where to find the binary
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # Text extractors
 def extract_text_from_pdf(pdf_path):
@@ -25,6 +29,7 @@ def extract_text_from_image(image_path):
         return pytesseract.image_to_string(image)
     except Exception as e:
         return f"Image processing failed: {str(e)}"
+
 
 # Helper function to extract fields
 def extract_field(pattern, text, group=1):

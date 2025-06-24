@@ -5,9 +5,7 @@ import docx2txt
 import re
 import os
 from datetime import datetime
-import pytesseract
 
-# Explicitly tell pytesseract where to find the binary
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # Text extractors
@@ -15,9 +13,22 @@ def extract_text_from_pdf(pdf_path):
     text = ""
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
+            words = page.extract_words()
+
+            left_column = []
+            right_column = []
+
+            for word in words:
+                x_center = (word['x0'] + word['x1']) / 2
+                if x_center < page.width / 2:
+                    left_column.append(word['text'])
+                else:
+                    right_column.append(word['text'])
+
+            left_text = " ".join(left_column)
+            right_text = " ".join(right_column)
+            text += left_text + "\n" + right_text + "\n"
+
     return text
 
 def extract_text_from_docx(docx_path):
@@ -30,13 +41,12 @@ def extract_text_from_image(image_path):
     except Exception as e:
         return f"Image processing failed: {str(e)}"
 
-
 # Helper function to extract fields
 def extract_field(pattern, text, group=1):
     match = re.search(pattern, text, re.IGNORECASE)
     return match.group(group).strip() if match else None
 
-# Resume field parser
+# Resume field parser (unchanged from your version)
 def extract_resume_data(text):
     lines = text.splitlines()
     lines = [line.strip() for line in lines if line.strip()]
@@ -45,11 +55,9 @@ def extract_resume_data(text):
     name = None
     for line in lines[:5]:
         if re.match(r'^[A-Za-z\'-]+\s+[A-Za-z\'-]+$', line):
-            name = line.strip().title()  # Normalize to Title Case
+            name = line.strip().title()
             break
 
-
-    # Extract other basic fields
     email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', full_text)
     email = email_match.group(0) if email_match else None
 
@@ -59,7 +67,6 @@ def extract_resume_data(text):
     gender = extract_field(r'Gender\s*[:\-]?\s*(Male|Female|Other)', full_text)
     dob = extract_field(r'Date of Birth\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', full_text)
 
-    # Age calculation
     age = None
     if dob:
         for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"]:
@@ -70,24 +77,11 @@ def extract_resume_data(text):
             except ValueError:
                 continue
 
-    # === Extract Education Section ===
-    # edu_section = re.search(r'(Education|Educational Background)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.DOTALL | re.IGNORECASE)
-    edu_section = re.search(
-    r'(Education|Educational Background)[\s:\-]*\n(.*?)(?=\n[A-Z\s]{3,}:?|\Z)', 
-    full_text, 
-    re.DOTALL | re.IGNORECASE
-    )
+    edu_section = re.search(r'(Education|Educational Background)[\s:\-]*\n(.*?)(?=\n[A-Z\s]{3,}:?|\Z)', full_text, re.DOTALL | re.IGNORECASE)
     university = degree = major = gpax = grad_year = None
     if edu_section:
         edu_text = edu_section.group(2)
-
-        university_match = re.search(
-            r'((?:university|college|institute)\s+of\s+[^\n,]+|'
-            r'[^\n,]+(?:university|college|institute)[^\n,]*|'
-            r'[A-Z][^\n,]*(University|College|Institute)[^\n,]*)',
-            edu_text,
-            re.IGNORECASE
-        )
+        university_match = re.search(r'((?:university|college|institute)\s+of\s+[^\n,]+|[^\n,]+(?:university|college|institute)[^\n,]*|[A-Z][^\n,]*(University|College|Institute)[^\n,]*)', edu_text, re.IGNORECASE)
         if university_match:
             university = university_match.group(0).strip()
 
@@ -99,7 +93,6 @@ def extract_resume_data(text):
         if major_match:
             major = major_match.group(1).strip()
         else:
-            # Fallback: look for "Bachelor of ___" or similar
             degree_major_match = re.search(r'(?:bachelor|master|doctor)\s+of\s+([^\n,]+)', edu_text, re.IGNORECASE)
             if degree_major_match:
                 major = degree_major_match.group(1).strip()
@@ -112,24 +105,15 @@ def extract_resume_data(text):
         if grad_match:
             grad_year = grad_match.group(3)
 
-    # === Extract Skills Section ===
     skills_section = re.search(r'(Skills|Technologies|Tools|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.IGNORECASE | re.DOTALL)
     skills = []
     if skills_section:
         skill_text = skills_section.group(2)
-        # Clean skills, make them unique and properly capitalized
         skills = list({s.strip().title() for s in re.split(r'[,•;|]', skill_text) if re.search(r'[a-zA-Z]', s)})
     skills = skills if skills else None
 
-    # === Extract Work Experience Section (Multiple Entries) ===
     experience_list = []
-    experience_blocks = re.findall(
-        r'(?i)(Company\s*[:\-]?\s*(.*?)\n)?'
-        r'(Position\s*[:\-]?\s*(.*?)\n)?'
-        r'((?:\w{3,9}\s\d{4})\s*[-–]\s*(?:\w{3,9}\s\d{4}|Present))\n'
-        r'((?:[-•*].*\n?)+)',
-        full_text
-    )
+    experience_blocks = re.findall(r'(?i)(Company\s*[:\-]?\s*(.*?)\n)?(Position\s*[:\-]?\s*(.*?)\n)?((?:\w{3,9}\s\d{4})\s*[-–]\s*(?:\w{3,9}\s\d{4}|Present))\n((?:[-•*].*\n?)+)', full_text)
     for block in experience_blocks:
         exp = {
             "Company": block[1].strip() if block[1] else None,

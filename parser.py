@@ -81,25 +81,32 @@ def extract_resume_data(text):
     if edu_section:
         edu_text = edu_section.group(2)
 
-        university_match = re.search(r'(university|institute|college)[^\n]*', edu_text, re.IGNORECASE)
-        if university_match:
-            university = university_match.group(0).strip()
+        university_match = re.search(
+            r'((?:university|college|institute)\s+of\s+[^\n,]+|[^\n,]+(?:university|college|institute))',
+            edu_text,
+            re.IGNORECASE
+        )
 
         degree_match = re.search(r'(?i)(bachelor|master|doctor)[^\n]*', edu_text)
         if degree_match:
             degree = degree_match.group(0).strip()
 
-        major_match = re.search(r'(?i)(major\s*[:\-]?\s*)([^\n,]+)', edu_text)
+        major_match = re.search(r'(?i)major\s*[:\-]?\s*([^\n,]+)', edu_text)
         if major_match:
-            major = major_match.group(2).strip()
+            major = major_match.group(1).strip()
+        else:
+            # Fallback: look for "Bachelor of ___" or similar
+            degree_major_match = re.search(r'(?:bachelor|master|doctor)\s+of\s+([^\n,]+)', edu_text, re.IGNORECASE)
+            if degree_major_match:
+                major = degree_major_match.group(1).strip()
 
         gpax_match = re.search(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', edu_text)
         if gpax_match:
-            gpax = gpax_match.group(2).strip()
+            gpax = float(gpax_match.group(2).strip())
 
-        grad_match = re.search(r'Graduation\s*(Year)?\s*[:\-]?\s*(\d{4})', edu_text)
+        grad_match = re.search(r'(Graduation\s*(Year)?|Study Period)\s*[:\-]?\s*(\d{4})\s*(?:[-–]\s*(\d{4}|Present))?', edu_text, re.IGNORECASE)
         if grad_match:
-            grad_year = grad_match.group(2).strip()
+            grad_year = grad_match.group(3)
 
     # === Extract Skills Section ===
     skills_section = re.search(r'(Skills|Technologies|Tools|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.IGNORECASE | re.DOTALL)

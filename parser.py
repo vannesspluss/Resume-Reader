@@ -20,8 +20,11 @@ def extract_text_from_docx(docx_path):
     return docx2txt.process(docx_path)
 
 def extract_text_from_image(image_path):
-    image = Image.open(image_path)
-    return pytesseract.image_to_string(image)
+    try:
+        image = Image.open(image_path)
+        return pytesseract.image_to_string(image)
+    except Exception as e:
+        return f"Image processing failed: {str(e)}"
 
 # Helper function to extract fields
 def extract_field(pattern, text, group=1):
@@ -63,7 +66,12 @@ def extract_resume_data(text):
                 continue
 
     # === Extract Education Section ===
-    edu_section = re.search(r'(Education|Educational Background)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.DOTALL | re.IGNORECASE)
+    # edu_section = re.search(r'(Education|Educational Background)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.DOTALL | re.IGNORECASE)
+    edu_section = re.search(
+    r'(Education|Educational Background)[\s:\-]*\n(.*?)(?=\n[A-Z\s]{3,}:?|\Z)', 
+    full_text, 
+    re.DOTALL | re.IGNORECASE
+    )
     university = degree = major = gpax = grad_year = None
     if edu_section:
         edu_text = edu_section.group(2)

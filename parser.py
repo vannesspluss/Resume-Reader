@@ -82,10 +82,14 @@ def extract_resume_data(text):
         edu_text = edu_section.group(2)
 
         university_match = re.search(
-            r'((?:university|college|institute)\s+of\s+[^\n,]+|[^\n,]+(?:university|college|institute))',
+            r'((?:university|college|institute)\s+of\s+[^\n,]+|'
+            r'[^\n,]+(?:university|college|institute)[^\n,]*|'
+            r'[A-Z][^\n,]*(University|College|Institute)[^\n,]*)',
             edu_text,
             re.IGNORECASE
         )
+        if university_match:
+            university = university_match.group(0).strip()
 
         degree_match = re.search(r'(?i)(bachelor|master|doctor)[^\n]*', edu_text)
         if degree_match:

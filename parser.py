@@ -75,7 +75,7 @@ def extract_resume_data(text):
         if university_match:
             university = university_match.group(0).strip()
 
-        degree_match = re.search(r'(?i)(BACHELOR|MASTER|DOCTOR|bachelor|master|doctor)[^\n,]*', edu_text)
+        degree_match = re.search(r'(?i)(BACHELOR|MASTER|DOCTOR|Bachelor|Master|Doctor|bachelor|master|doctor)[^\n,]*', edu_text)
         if degree_match:
             degree = degree_match.group(0).strip()
 
@@ -83,9 +83,14 @@ def extract_resume_data(text):
         if major_match:
             major = major_match.group(1).strip()
         else:
-            degree_major_match = re.search(r'(?:BACHELOR|MASTER|DOCTOR|bachelor|master|doctor)\s+of\s+([^\n,]+)', edu_text, re.IGNORECASE)
+            degree_major_match = re.search(r'(?:BACHELOR|MASTER|DOCTOR|Bachelor|Master|Doctor|bachelor|master|doctor)\s+of\s+([^\n,]+)', edu_text, re.IGNORECASE)
             if degree_major_match:
                 major = degree_major_match.group(1).strip()
+            else:
+                degree_major_match = re.search(r'(?i)(Bachelor|Master|Doctor)[’''s]*\s+(Degree)?\s*(of|in)?\s+([^\n,]+)',edu_text)
+                if degree_major_match:
+                    major = degree_major_match.group(1).strip() 
+
 
         gpax_match = re.search(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', edu_text)
         if gpax_match:
@@ -102,14 +107,33 @@ def extract_resume_data(text):
             range_match = re.search(r'(?i)(\d{4})\s*[-–]\s*(\d{4}|Present)', edu_text)
             if range_match:
                 grad_year = range_match.group(2)
-                
+
     # --- Skills extraction ---
     skills_section = re.search(r'(?i)(SKILLS|Skill Set|Technologies|Tools|Soft Skills)\s*\n(.*?)(?=\n[A-Z][A-Z ]{2,}|$)', full_text, re.DOTALL)
     skills = []
+    structured_skills = {}
+
     if skills_section:
         skill_text = skills_section.group(2)
-        skills = list({s.strip().title() for s in re.split(r'[,•;|]\s*', skill_text) if re.search(r'[a-zA-Z]', s)})
-    skills = skills if skills else None
+
+        # Pattern to find subsection headers like "Programming:", "Software:", etc.
+        subsections = re.split(r'\n(?=[A-Za-z ]+:\s*)', skill_text.strip())
+
+        for section in subsections:
+            if ":" in section:
+                header, items = section.split(":", 1)
+                header = header.strip().title()
+                item_list = [s.strip().title() for s in re.split(r'[,•;|]\s*', items) if re.search(r'[a-zA-Z]', s)]
+                structured_skills[header] = item_list
+            else:
+                # For any loose items without subsection headers
+                loose_items = [s.strip().title() for s in re.split(r'[,•;|]\s*', section) if re.search(r'[a-zA-Z]', s)]
+                if loose_items:
+                    structured_skills.setdefault("General", []).extend(loose_items)
+
+        # Optional: Flat list of all skills (if you still want that)
+        skills = [skill for sublist in structured_skills.values() for skill in sublist]
+
 
 
     # --- Experience extraction ---

@@ -90,18 +90,27 @@ def extract_resume_data(text):
         gpax_match = re.search(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', edu_text)
         if gpax_match:
             gpax = float(gpax_match.group(2).strip())
+        else:
+            gpax_match = re.search(r'(?i)(GPA|GPAX)\s*[:\-]?\s*([\d.]+)', edu_text)
+            if gpax_match:
+                gpax = float(gpax_match.group(2).strip())
 
         grad_match = re.search(r'(Graduation\s*(Year)?|Study Period)\s*[:\-]?\s*(\d{4})\s*(?:[-–]\s*(\d{4}|Present))?', edu_text, re.IGNORECASE)
         if grad_match:
             grad_year = grad_match.group(3)
+        else:
+            grad_match = re.search(r'(?i)(\d{4})\s*[-–]\s*(\d{4}|Present)', edu_text)
+            if grad_match:
+                grad_year = grad_match.group(3)
 
     # --- Skills extraction ---
-    skills_section = re.search(r'(SKILL|SKILLS|Skills|Technologies|Tools|Soft Skills)(.*?)(?=\n[A-Z][a-z]+|$)', full_text, re.IGNORECASE | re.DOTALL)
+    skills_section = re.search(r'(?i)(SKILLS|Skill Set|Technologies|Tools|Soft Skills)\s*\n(.*?)(?=\n[A-Z][A-Z ]{2,}|$)', full_text, re.DOTALL)
     skills = []
     if skills_section:
         skill_text = skills_section.group(2)
-        skills = list({s.strip().title() for s in re.split(r'[,•;|]', skill_text) if re.search(r'[a-zA-Z]', s)})
+        skills = list({s.strip().title() for s in re.split(r'[,•;|]\s*', skill_text) if re.search(r'[a-zA-Z]', s)})
     skills = skills if skills else None
+
 
     # --- Experience extraction ---
     experience_list = []

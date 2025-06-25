@@ -13,22 +13,9 @@ def extract_text_from_pdf(pdf_path):
     text = ""
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            words = page.extract_words()
-
-            left_column = []
-            right_column = []
-
-            for word in words:
-                x_center = (word['x0'] + word['x1']) / 2
-                if x_center < page.width / 2:
-                    left_column.append(word['text'])
-                else:
-                    right_column.append(word['text'])
-
-            left_text = " ".join(left_column)
-            right_text = " ".join(right_column)
-            text += left_text + "\n" + right_text + "\n"
-
+            raw_text = page.extract_text(layout=True)
+            if text:
+                text += raw_text + "\n"
     return text
 
 def extract_text_from_docx(docx_path):

@@ -99,10 +99,10 @@ def extract_resume_data(text):
         if grad_match:
             grad_year = grad_match.group(3)
         else:
-            grad_match = re.search(r'(?i)(\d{4})\s*[-–]\s*(\d{4}|Present)', edu_text)
-            if grad_match:
-                grad_year = grad_match.group(3)
-
+            range_match = re.search(r'(?i)(\d{4})\s*[-–]\s*(\d{4}|Present)', edu_text)
+            if range_match:
+                grad_year = range_match.group(2)
+                
     # --- Skills extraction ---
     skills_section = re.search(r'(?i)(SKILLS|Skill Set|Technologies|Tools|Soft Skills)\s*\n(.*?)(?=\n[A-Z][A-Z ]{2,}|$)', full_text, re.DOTALL)
     skills = []

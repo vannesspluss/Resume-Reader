@@ -107,41 +107,30 @@ def extract_resume_data(text):
     #         range_match = re.search(r'(?i)(\d{4})\s*[-–]\s*(\d{4}|Present)', edu_text)
     #         if range_match:
     #             grad_year = range_match.group(2)
-
-    # --- Education extraction ---
+    
+    edu_section = re.search(r'(?i)(EDUCATION|Educational Background)[\s:\-]*\n(.*?)(?=\n[A-Z][A-Z\s]{2,}[:\-]|\Z)', full_text, re.DOTALL)
     university = degree = major = gpax = grad_year = None
-    education_list = []
 
-    edu_section = re.search(r'(EDUCATION|Education|Educational Background)[\s:\-]*\n(.*?)(?=\n[A-Z\s]{3,}:?|\Z)', full_text, re.DOTALL | re.IGNORECASE)
     if edu_section:
-        edu_text = edu_section.group(2).strip()
+        edu_text = edu_section.group(2)
+        edu_lines = [line.strip() for line in edu_text.split("\n") if line.strip()]
 
-        # Split by lines where a school name likely starts
-        schools = re.split(r'\n(?=[A-Z][^\n]*?(University|College|Institute|School))', edu_text, flags=re.IGNORECASE)
-        
-        # Recombine pairs (split gives extra pieces)
-        for i in range(0, len(schools)-1, 2):
-            block = schools[i] + "\n" + schools[i+1]
-            
-            uni_match = re.search(r'([^\n]*?(University|College|Institute|School)[^\n]*)', block, re.IGNORECASE)
-            degree_match = re.search(r'(?i)(Bachelor|Master|Doctor)[’''s]*\s+(Degree)?\s*(of|in)?\s+([^\n,]+)', block)
-            gpax_match = re.search(r'(GPAX|GPA)\s*[:\-]?\s*([\d.]+)', block, re.IGNORECASE)
-            grad_match = re.search(r'(?i)(\d{4})\s*[-–]\s*(\d{4}|Present)', block)
+        for i, line in enumerate(edu_lines):
+            if re.search(r'(University|College|Institute)', line, re.IGNORECASE):
+                university = line.strip()
+                for j in range(i+1, min(i+4, len(edu_lines))):
+                    deg_match = re.search(r'(Bachelor|Master|Doctor)[^,\n]*', edu_lines[j], re.IGNORECASE)
+                    if deg_match:
+                        degree = deg_match.group(0).strip()
 
-            education_list.append({
-                "University": uni_match.group(1).strip() if uni_match else None,
-                "Degree": degree_match.group(1).title() if degree_match else None,
-                "Major": degree_match.group(4).strip() if degree_match else None,
-                "Gpax": float(gpax_match.group(2)) if gpax_match else None,
-                "Study Period": grad_match.group(0) if grad_match else None
-            })
+                    major_match = re.search(r'(?i)(Program|Major)\s*(in|of)?\s*([^\n,]+)', edu_lines[j])
+                    if major_match:
+                        major = major_match.group(3).strip()
 
-        # Optionally, for compatibility, use first school for flat fields
-        if education_list:
-            university = education_list[0]["University"]
-            degree = education_list[0]["Degree"]
-            major = education_list[0]["Major"]
-            gpax = education_list[0]["Gpax"]
+                    gpax_match = re.search(r'(GPA|GPAX)\s*[:\-]?\s*([\d.]+)', edu_lines[j], re.IGNORECASE)
+                    if gpax_match:
+                        gpax = float(gpax_match.group(2).strip())
+                break
 
 
     # --- Skills extraction ---
